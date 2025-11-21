@@ -32,16 +32,18 @@ dependencies {
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.2.0'
 }
 
-//ext {
-//    // These could be set globally
-//    PUBLISH_GROUP_ID = 'com.smallbuer'
-//    PUBLISH_VERSION = '1.0.7'
-//
-//    // These should be module-dependent
-//    PUBLISH_ARTIFACT_ID = 'jsbridge'
-//    ARTIFACT_DESCRIPTION = POM_DESCRIPTION
-//    uploadJavadocs = false
-//    uploadSources = false
-//}
-//
-//apply from: "${rootProject.projectDir}/publish-mavencentral.gradle"
+
+afterEvaluate {
+    publishing {
+        publications {
+            maven(MavenPublication) {
+                groupId = 'com.github.ruirui1128'
+                artifactId = 'jsbridge'
+                version = '0.0.1'
+
+                // 指定要发布的 AAR 文件
+                artifact("$buildDir/outputs/aar/jsbridge-release.aar")
+            }
+        }
+    }
+}
