@@ -9,6 +9,8 @@ public abstract class CallBackFunction {
 
     public String handlerName;
 
+    public String jsParams;
+
     public abstract void onCallBack(String data);
 
 }

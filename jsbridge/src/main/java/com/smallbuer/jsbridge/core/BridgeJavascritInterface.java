@@ -39,18 +39,17 @@ public class BridgeJavascritInterface extends BaseJavascriptInterface {
             if (mWebView.getLocalMessageHandlers().containsKey(handlerName)) {
                 BridgeHandler bridgeHandler = mWebView.getLocalMessageHandlers().get(handlerName);
 
-                Set<String> handlerLogNames = mWebView.getHandlerLogNames();
-                if (handlerLogNames.contains(handlerName)) {
-                    bridgeHandler.handler(mWebView.getContext(), data, new CallBack(callbackId, ""));
+                if (mWebView.getHandlerLogNames().contains(handlerName)) {
+                    bridgeHandler.handler(mWebView.getContext(), data, new CallBack(callbackId, "", ""));
                 } else {
-                    bridgeHandler.handler(mWebView.getContext(), data, new CallBack(callbackId, handlerName));
+                    bridgeHandler.handler(mWebView.getContext(), data, new CallBack(callbackId, handlerName, data));
                 }
                 return;
             }
 
             if (mBridge.getMessageHandlers().containsKey(handlerName)) {
                 BridgeHandler bridgeHandler = mBridge.getMessageHandlers().get(handlerName);
-                bridgeHandler.handler(mWebView.getContext(), data, new CallBack(callbackId, handlerName));
+                bridgeHandler.handler(mWebView.getContext(), data, new CallBack(callbackId, handlerName, data));
             }
         });
 
@@ -59,8 +58,9 @@ public class BridgeJavascritInterface extends BaseJavascriptInterface {
     public class CallBack extends CallBackFunction {
         private String callbackId;
 
-        public CallBack(String callbackId, String handlerName) {
+        public CallBack(String callbackId, String handlerName, String params) {
             this.callbackId = callbackId;
+            this.jsParams = params;
             this.handlerName = handlerName;
         }
 
