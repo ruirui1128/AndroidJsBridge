@@ -42,7 +42,7 @@ repositories {
 ```
 
 dependencies {
-      implementation 'com.smallbuer:jsbridge:1.0.0'
+      implementation 'com.github.ruirui1128:AndroidJsBridge:0.0.4'
 }
 ```
 
