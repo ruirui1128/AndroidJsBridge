@@ -39,8 +39,7 @@ afterEvaluate {
             maven(MavenPublication) {
                 groupId = 'com.github.ruirui1128'
                 artifactId = 'jsbridge'
-                version = '0.0.1'
-
+                version = '0.0.3'
                 // 指定要发布的 AAR 文件
                 artifact("$buildDir/outputs/aar/jsbridge-release.aar")
             }
