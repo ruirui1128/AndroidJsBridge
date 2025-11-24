@@ -89,6 +89,10 @@ public class BridgeWebView extends WebView implements IWebView {
         filterHandlerLog.addAll(list);
     }
 
+    public void clearFilterHandler() {
+        filterHandlerLog.clear();
+    }
+
 
     @Override
     public Map<String, BridgeHandler> getLocalMessageHandlers() {
