@@ -12,6 +12,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -35,7 +36,6 @@ public class BridgeTiny {
     public Map<String, OnBridgeCallback> getCallBacks() {
         return mCallbacks;
     }
-
     private BridgeJavascritInterface mJavascriptInterface;
 
     public BridgeTiny(IWebView webView) {
@@ -79,7 +79,7 @@ public class BridgeTiny {
      * @param message Message
      */
     public void dispatchMessage(Object message) {
-
+//
 //        String messageJson = new Gson().toJson(message);
 //        //escape special characters for json string
 //        messageJson = messageJson.replaceAll("(\\\\)([^utrn])", "\\\\\\\\$1$2");
@@ -102,33 +102,26 @@ public class BridgeTiny {
 //            }
 //        }
 
-        // 1. 核心优化：两次序列化。
-        // 第一次：将对象转成 JSON 字符串（例如 {"name":"A"}）
-        String jsonStr = new Gson().toJson(message);
-        // 第二次：将 JSON 字符串转成“合法的 JS 字符串字面量”
-        // 这步会自动帮你处理引号转义、斜杠转义，比手写 7 个 replaceAll 稳健得多
-        String safeJsonArgument = new Gson().toJson(jsonStr);
-        // 2. 组合命令
-        final String javascriptCommand = String.format(BridgeUtil.JS_HANDLE_MESSAGE_FROM_JAVA, safeJsonArgument);
-        BridgeLog.d(TAG, "javascriptCommand -> " + javascriptCommand);
+
+        String messageJson = new Gson().toJson(message);
+
+        String javascriptCommand =
+                "javascript:handleMessageFromJava(" + messageJson + ")";
 
         if (Looper.myLooper() == Looper.getMainLooper()) {
-            executeJs(javascriptCommand);
+            mWebView.evaluateJavascript(javascriptCommand, null);
         } else {
-            mMainHandler.post(() -> executeJs(javascriptCommand));
+            mMainHandler.post(() ->
+                    mWebView.evaluateJavascript(javascriptCommand, null)
+            );
         }
+
 
     }
 
-    // 抽取执行方法
-    private void executeJs (String command){
-        // Android 4.4+ 统一建议使用 evaluateJavascript，性能更好且支持返回值
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-            mWebView.evaluateJavascript(command, null);
-        } else {
-            mWebView.loadUrl(command);
-        }
-    }
+
+
+
 
 
     public void sendResponse(Object data, String callbackId) {
