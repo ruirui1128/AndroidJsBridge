@@ -79,42 +79,42 @@ public class BridgeTiny {
      * @param message Message
      */
     public void dispatchMessage(Object message) {
-//
-//        String messageJson = new Gson().toJson(message);
-//        //escape special characters for json string
-//        messageJson = messageJson.replaceAll("(\\\\)([^utrn])", "\\\\\\\\$1$2");
-//        messageJson = messageJson.replaceAll("(?<=[^\\\\])(\")", "\\\\\"");
-//        messageJson = messageJson.replaceAll("(?<=[^\\\\])(\')", "\\\\\'");
-//        messageJson = messageJson.replaceAll("%7B", URLEncoder.encode("%7B"));
-//        messageJson = messageJson.replaceAll("%7D", URLEncoder.encode("%7D"));
-//        messageJson = messageJson.replaceAll("%22", URLEncoder.encode("%22"));
-//        messageJson = messageJson.replaceAll("%", URLEncoder.encode("%"));
-//        String javascriptCommand = String.format(BridgeUtil.JS_HANDLE_MESSAGE_FROM_JAVA, messageJson);
-//
-//        BridgeLog.d(TAG, "javascriptCommand->" + javascriptCommand);
-//
-//        // the data must be passed on the main thread --- focus
-//        if (Thread.currentThread() == Looper.getMainLooper().getThread()) {
-//            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT && javascriptCommand.length() >= BridgeUtil.URL_MAX_CHARACTER_NUM) {
-//                mWebView.evaluateJavascript(javascriptCommand, null);
-//            } else {
-//                mWebView.loadUrl(javascriptCommand);
-//            }
-//        }
-
 
         String messageJson = new Gson().toJson(message);
+        //escape special characters for json string
+        messageJson = messageJson.replaceAll("(\\\\)([^utrn])", "\\\\\\\\$1$2");
+        messageJson = messageJson.replaceAll("(?<=[^\\\\])(\")", "\\\\\"");
+        messageJson = messageJson.replaceAll("(?<=[^\\\\])(\')", "\\\\\'");
+        messageJson = messageJson.replaceAll("%7B", URLEncoder.encode("%7B"));
+        messageJson = messageJson.replaceAll("%7D", URLEncoder.encode("%7D"));
+        messageJson = messageJson.replaceAll("%22", URLEncoder.encode("%22"));
+        messageJson = messageJson.replaceAll("%", URLEncoder.encode("%"));
+        String javascriptCommand = String.format(BridgeUtil.JS_HANDLE_MESSAGE_FROM_JAVA, messageJson);
 
-        String javascriptCommand =
-                "javascript:handleMessageFromJava(" + messageJson + ")";
+        BridgeLog.d(TAG, "javascriptCommand->" + javascriptCommand);
 
-        if (Looper.myLooper() == Looper.getMainLooper()) {
-            mWebView.evaluateJavascript(javascriptCommand, null);
-        } else {
-            mMainHandler.post(() ->
-                    mWebView.evaluateJavascript(javascriptCommand, null)
-            );
+        // the data must be passed on the main thread --- focus
+        if (Thread.currentThread() == Looper.getMainLooper().getThread()) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT && javascriptCommand.length() >= BridgeUtil.URL_MAX_CHARACTER_NUM) {
+                mWebView.evaluateJavascript(javascriptCommand, null);
+            } else {
+                mWebView.loadUrl(javascriptCommand);
+            }
         }
+
+
+//        String messageJson = new Gson().toJson(message);
+//
+//        String javascriptCommand =
+//                "javascript:handleMessageFromJava(" + messageJson + ")";
+//
+//        if (Looper.myLooper() == Looper.getMainLooper()) {
+//            mWebView.evaluateJavascript(javascriptCommand, null);
+//        } else {
+//            mMainHandler.post(() ->
+//                    mWebView.evaluateJavascript(javascriptCommand, null)
+//            );
+//        }
 
 
     }
