@@ -5,9 +5,12 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.text.TextUtils;
+
 import com.google.gson.Gson;
+
 import org.json.JSONException;
 import org.json.JSONObject;
+
 import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -29,17 +32,20 @@ public class BridgeTiny {
     private List<Object> mMessages = new ArrayList<>();
     private Handler mMainHandler = new Handler(Looper.getMainLooper());
 
-    public Map<String, OnBridgeCallback> getCallBacks(){
+    public Map<String, OnBridgeCallback> getCallBacks() {
         return mCallbacks;
     }
 
-    public BridgeTiny(IWebView webView){
+    private BridgeJavascritInterface mJavascriptInterface;
+
+    public BridgeTiny(IWebView webView) {
 
         this.mWebView = webView;
 
         if (Build.VERSION.SDK_INT >= 17) {
-            webView.addJavascriptInterface(new BridgeJavascritInterface(mCallbacks, this, webView), "jsbridge");
-        }else {
+            mJavascriptInterface = new BridgeJavascritInterface(mCallbacks, this, webView);
+            webView.addJavascriptInterface(mJavascriptInterface, "jsbridge");
+        } else {
             //before 4.2 addJavascriptInterface has security risk
             webView.removeJavascriptInterface("searchBoxJavaBridge_");
             webView.removeJavascriptInterface("accessibility");
@@ -48,15 +54,15 @@ public class BridgeTiny {
         mMessageHandlers.putAll(Bridge.INSTANCE.getMessageHandlers());
     }
 
-    public Map<String, BridgeHandler> getMessageHandlers(){
+    public Map<String, BridgeHandler> getMessageHandlers() {
         return mMessageHandlers;
     }
 
 
     public void webViewLoadJs(IWebView view) {
-        if(Build.VERSION.SDK_INT >= 17) {
+        if (Build.VERSION.SDK_INT >= 17) {
             view.loadUrl(String.format(BridgeUtil.JAVASCRIPT_STR, BridgeUtil.WebviewJavascriptBridge));
-        }else{
+        } else {
             view.loadUrl(String.format(BridgeUtil.JAVASCRIPT_STR, BridgeUtil.WebviewJavascriptBridgeMin));
         }
         if (mMessages != null) {
@@ -74,41 +80,68 @@ public class BridgeTiny {
      */
     public void dispatchMessage(Object message) {
 
-        String messageJson = new Gson().toJson(message);
-        //escape special characters for json string
-        messageJson = messageJson.replaceAll("(\\\\)([^utrn])", "\\\\\\\\$1$2");
-        messageJson = messageJson.replaceAll("(?<=[^\\\\])(\")", "\\\\\"");
-        messageJson = messageJson.replaceAll("(?<=[^\\\\])(\')", "\\\\\'");
-        messageJson = messageJson.replaceAll("%7B", URLEncoder.encode("%7B"));
-        messageJson = messageJson.replaceAll("%7D", URLEncoder.encode("%7D"));
-        messageJson = messageJson.replaceAll("%22", URLEncoder.encode("%22"));
-        messageJson = messageJson.replaceAll("%", URLEncoder.encode("%"));
-        String javascriptCommand = String.format(BridgeUtil.JS_HANDLE_MESSAGE_FROM_JAVA, messageJson);
+//        String messageJson = new Gson().toJson(message);
+//        //escape special characters for json string
+//        messageJson = messageJson.replaceAll("(\\\\)([^utrn])", "\\\\\\\\$1$2");
+//        messageJson = messageJson.replaceAll("(?<=[^\\\\])(\")", "\\\\\"");
+//        messageJson = messageJson.replaceAll("(?<=[^\\\\])(\')", "\\\\\'");
+//        messageJson = messageJson.replaceAll("%7B", URLEncoder.encode("%7B"));
+//        messageJson = messageJson.replaceAll("%7D", URLEncoder.encode("%7D"));
+//        messageJson = messageJson.replaceAll("%22", URLEncoder.encode("%22"));
+//        messageJson = messageJson.replaceAll("%", URLEncoder.encode("%"));
+//        String javascriptCommand = String.format(BridgeUtil.JS_HANDLE_MESSAGE_FROM_JAVA, messageJson);
+//
+//        BridgeLog.d(TAG, "javascriptCommand->" + javascriptCommand);
+//
+//        // the data must be passed on the main thread --- focus
+//        if (Thread.currentThread() == Looper.getMainLooper().getThread()) {
+//            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT && javascriptCommand.length() >= BridgeUtil.URL_MAX_CHARACTER_NUM) {
+//                mWebView.evaluateJavascript(javascriptCommand, null);
+//            } else {
+//                mWebView.loadUrl(javascriptCommand);
+//            }
+//        }
 
-        BridgeLog.d(TAG,"javascriptCommand->"+javascriptCommand);
+        // 1. 核心优化：两次序列化。
+        // 第一次：将对象转成 JSON 字符串（例如 {"name":"A"}）
+        String jsonStr = new Gson().toJson(message);
+        // 第二次：将 JSON 字符串转成“合法的 JS 字符串字面量”
+        // 这步会自动帮你处理引号转义、斜杠转义，比手写 7 个 replaceAll 稳健得多
+        String safeJsonArgument = new Gson().toJson(jsonStr);
+        // 2. 组合命令
+        final String javascriptCommand = String.format(BridgeUtil.JS_HANDLE_MESSAGE_FROM_JAVA, safeJsonArgument);
+        BridgeLog.d(TAG, "javascriptCommand -> " + javascriptCommand);
 
-        // the data must be passed on the main thread --- focus
-        if (Thread.currentThread() == Looper.getMainLooper().getThread()) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT&&javascriptCommand.length()>=BridgeUtil.URL_MAX_CHARACTER_NUM) {
-                mWebView.evaluateJavascript(javascriptCommand,null);
-            }else {
-                mWebView.loadUrl(javascriptCommand);
-            }
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            executeJs(javascriptCommand);
+        } else {
+            mMainHandler.post(() -> executeJs(javascriptCommand));
+        }
+
+    }
+
+    // 抽取执行方法
+    private void executeJs (String command){
+        // Android 4.4+ 统一建议使用 evaluateJavascript，性能更好且支持返回值
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+            mWebView.evaluateJavascript(command, null);
+        } else {
+            mWebView.loadUrl(command);
         }
     }
 
 
     public void sendResponse(Object data, String callbackId) {
-        if (!(data instanceof String)){
+        if (!(data instanceof String)) {
             return;
         }
         if (!TextUtils.isEmpty(callbackId)) {
             final JSResponse response = new JSResponse();
             response.responseId = callbackId;
-            response.responseData = (String) data ;
-            if (Thread.currentThread() == Looper.getMainLooper().getThread()){
+            response.responseData = (String) data;
+            if (Thread.currentThread() == Looper.getMainLooper().getThread()) {
                 dispatchMessage(response);
-            }else {
+            } else {
                 Handler mainHandler = new Handler(Looper.getMainLooper());
                 mainHandler.post(new Runnable() {
                     @Override
@@ -130,7 +163,7 @@ public class BridgeTiny {
      * @param responseCallback OnBridgeCallback
      */
     public void callHandler(String handlerName, Object data, OnBridgeCallback responseCallback) {
-        if (!(data instanceof String)){
+        if (!(data instanceof String)) {
             return;
         }
         JSRequest request = new JSRequest();
@@ -159,57 +192,56 @@ public class BridgeTiny {
             mMessages.add(message);
         } else {
             dispatchMessage(message);
-       }
+        }
     }
 
 
     /**
-     *  JsPrompt处理方式
-     * @param view webview
+     * JsPrompt处理方式
+     *
+     * @param view    webview
      * @param message
      */
-   public void onJsPrompt(final IWebView view,final String message){
+    public void onJsPrompt(final IWebView view, final String message) {
 
-       if (Build.VERSION.SDK_INT < 17) {
-           new Thread(new Runnable(){
-               @Override
-               public void run() {
-                   try {
-                       JSONObject jsonObject = new JSONObject(message);
-                       final String responseId = jsonObject.getString("callbackId");
-                       final String data = jsonObject.getString("data");
-                       Boolean hasHanderName = jsonObject.has("handlerName");
-                       if(hasHanderName){
-                           String HanderName = jsonObject.getString("handlerName");
-                           bridgeHandler(view,data,HanderName,responseId);
-                       }else {
-                           if (!TextUtils.isEmpty(responseId)) {
-                               mMainHandler.post(new Runnable() {
-                                   @Override
-                                   public void run() {
-                                       OnBridgeCallback function = getCallBacks().remove(responseId);
-                                       if (function != null) {
-                                           function.onCallBack(data);
-                                       }
-                                   }
-                               });
-                           }
-                       }
-                   } catch (JSONException e) {
-                       e.printStackTrace();
-                   }
-               }
-           }).start();
-       }
-
-
+        if (Build.VERSION.SDK_INT < 17) {
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        JSONObject jsonObject = new JSONObject(message);
+                        final String responseId = jsonObject.getString("callbackId");
+                        final String data = jsonObject.getString("data");
+                        Boolean hasHanderName = jsonObject.has("handlerName");
+                        if (hasHanderName) {
+                            String HanderName = jsonObject.getString("handlerName");
+                            bridgeHandler(view, data, HanderName, responseId);
+                        } else {
+                            if (!TextUtils.isEmpty(responseId)) {
+                                mMainHandler.post(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        OnBridgeCallback function = getCallBacks().remove(responseId);
+                                        if (function != null) {
+                                            function.onCallBack(data);
+                                        }
+                                    }
+                                });
+                            }
+                        }
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }).start();
+        }
 
 
-   }
+    }
 
-    private void bridgeHandler(final IWebView view, final String data, final String handlerName, final String callbackId){
+    private void bridgeHandler(final IWebView view, final String data, final String handlerName, final String callbackId) {
 
-        if(TextUtils.isEmpty(handlerName)){
+        if (TextUtils.isEmpty(handlerName)) {
             return;
         }
         //change to main thread
@@ -217,22 +249,24 @@ public class BridgeTiny {
             @Override
             public void run() {
 
-                if(getMessageHandlers().containsKey(handlerName)){
+                if (getMessageHandlers().containsKey(handlerName)) {
                     BridgeHandler bridgeHandler = getMessageHandlers().get(handlerName);
-                    bridgeHandler.handler(view.getContext(),data, new CallBack(callbackId));
+                    bridgeHandler.handler(view.getContext(), data, new CallBack(callbackId));
                 }
             }
         });
     }
 
-    public class CallBack extends CallBackFunction{
-        private String callbackId ;
-        public CallBack(String callbackId){
-            this.callbackId =  callbackId;
+    public class CallBack extends CallBackFunction {
+        private String callbackId;
+
+        public CallBack(String callbackId) {
+            this.callbackId = callbackId;
         }
+
         @Override
         public void onCallBack(String data) {
-            sendResponse(data,callbackId);
+            sendResponse(data, callbackId);
         }
     }
 
@@ -240,17 +274,20 @@ public class BridgeTiny {
     /**
      * free memory
      */
-    public void freeMemory(){
+    public void freeMemory() {
+        if (mJavascriptInterface != null) {
+            mJavascriptInterface.release();
+        }
 
-        if(mCallbacks!=null){
+        if (mCallbacks != null) {
             mCallbacks.clear();
         }
 
-        if(mMessageHandlers!=null){
+        if (mMessageHandlers != null) {
             mMessageHandlers.clear();
         }
 
-        if(mMessages!=null){
+        if (mMessages != null) {
             mMessages.clear();
         }
     }

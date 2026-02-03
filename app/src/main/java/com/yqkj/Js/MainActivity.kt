@@ -87,15 +87,13 @@ class MainActivity : AppCompatActivity() {
         mBtnTestShouldIntercept?.setOnClickListener {
             mBridgeWebView?.loadUrl("https://www.baidu.com")
         }
+        mBridgeWebView?.addFilterHandler(listOf<String>("toast","test").toSet() )
 
         //local register bridge
         mBridgeWebView?.addHandlerLocal("toast", object : BridgeHandler() {
             override fun handler(context: Context?, data: String?, function: CallBackFunction?) {
-                Log.i(
-                    TAG,
-                    "YY reponse data from js $data" + ",Thread is " + Thread.currentThread().name
-                )
                 Toast.makeText(this@MainActivity, data, Toast.LENGTH_SHORT).show()
+                Log.i(TAG, "toast data:${function?.handlerName}")
             }
         })
     }
