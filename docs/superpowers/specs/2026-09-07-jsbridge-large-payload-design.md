@@ -91,10 +91,10 @@ JSON 直接作为 JS 表达式传入不再包字符串字面量本可行，但�
 
 - 超过阈值时：`gson.toJson(message, chunkingAppendable)` 流式输出，`EscapingAppendable` 填满 512KB（`CHUNK_SIZE`，可配）即产生一个块
 - 每块经 `mMainHandler` **逐块节流发送**（每帧最多一块，post 队列自然节流，不糊主线程）
-- 每块调用注入 JS：`WebViewJavascriptBridge._receiveChunk(tid, index, total, '块文本')`；块文本用 §4 同一套转义
-- 协议容忍乱序：JS 端按 `index` 缓冲，集齐 `total` 块后按序拼接、`JSON.parse` 一次，走现有 `_dispatchMessageFromNative` 分发 —— H5 业务层无感
+- 每块调用注入 JS：`WebViewJavascriptBridge._receiveChunk(tid, index, '块文本')`；块文本用 §4 同一套转义
+- 协议容忍乱序：JS 端按 `index` 缓冲，收到提交消息 `_commitChunked(tid, total)` 后按序拼接、`JSON.parse` 一次（流式发送时 `total` 在流结束后才可知，故由提交消息携带，而非每块携带），走现有 `_dispatchMessageFromNative` 分发 —— H5 业务层无感
 - 无需 ACK：`evaluateJavascript` 在同一渲染上下文按调用序执行，天然有序
-- 转义是逐字符局部的，流式切割点天然安全（转义序列 `\\u2028` 等不会在块边界被切断——发送侧以"完整字符"为切分单位）；UTF-16 代理对被切断也安全（JS 字符串按码元拼接自动复原）
+- 转义是逐字符局部的，流式切割点天然安全（转义序列 `\\u2028` 等不会在块边界被切断——发送侧以"完整字符"为切分单位）；切割点不拆开 UTF-16 代理对（防御性：个别 WebView 实现经 UTF-8 转换时孤立代理会被替换损坏）（JS 字符串按码元拼接自动复原）
 - 可选进度钩子 `onChunkProgress(tid, sent, total)`：本次只留接口位，默认不实现 UI
 
 ### 5.2 H5 → 原生（注入 JS + Java 接收方）
@@ -102,12 +102,12 @@ JSON 直接作为 JS 表达式传入不再包字符串字面量本可行，但�
 注入 JS（库内部字符串，对 H5 透明）：
 
 - `_doSend` 检测 payload `length > 阈值`（与原生侧一致的常量，两端各存一份）
-- 分块调用 `window.jsbridge.receiveChunk(tid, index, total, chunk)`（新增 `@JavascriptInterface` 方法，增量添加，不影响既有 `send`/`handler`）
-- 最后附一次 `window.jsbridge.handlerChunked(handlerName, callbackId, tid, total)` 声明重组意图
+- 分块调用 `window.jsbridge.receiveChunk(tid, index, chunk)`（新增 `@JavascriptInterface` 方法，增量添加，不影响既有 `send`/`handler`）
+- 最后附一次 `window.jsbridge.commitChunked(handlerName, callbackId, tid, total)` 声明重组意图
 
 Java 端：
 
-- 新增 `ChunkAssembler`：按 `tid` 重组；首块携带 `totalLen` 预分配 `StringBuilder`，按 `index` 写入
+- 新增 `ChunkAssembler`：按 `tid` 重组；`total` 由提交消息携带，块按 `index` 存槽位，组装时按序拼接
 - 重组完成后走现有主线程分发路径（与 `handler` 一致）
 - 大 payload 的 BridgeHandler 分发仍在主线程（保持现有行为）；业务侧若处理耗时可在自己的 Handler 里自行切线程，库不强制（不做线程模型改造，控制范围）
 
