@@ -5,6 +5,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.text.TextUtils;
+import android.util.Log;
 
 import com.google.gson.Gson;
 
@@ -36,6 +37,7 @@ public class BridgeTiny {
     public Map<String, OnBridgeCallback> getCallBacks() {
         return mCallbacks;
     }
+
     private BridgeJavascritInterface mJavascriptInterface;
 
     public BridgeTiny(IWebView webView) {
@@ -78,50 +80,44 @@ public class BridgeTiny {
      *
      * @param message Message
      */
+
+    public static final String JS_HANDLE_MESSAGE_FROM_JAVA =
+            "WebViewJavascriptBridge._handleMessageFromNative(%s);";
+    private static final Gson GSON = new Gson();
+
     public void dispatchMessage(Object message) {
 
-        String messageJson = new Gson().toJson(message);
-        //escape special characters for json string
-        messageJson = messageJson.replaceAll("(\\\\)([^utrn])", "\\\\\\\\$1$2");
-        messageJson = messageJson.replaceAll("(?<=[^\\\\])(\")", "\\\\\"");
-        messageJson = messageJson.replaceAll("(?<=[^\\\\])(\')", "\\\\\'");
-        messageJson = messageJson.replaceAll("%7B", URLEncoder.encode("%7B"));
-        messageJson = messageJson.replaceAll("%7D", URLEncoder.encode("%7D"));
-        messageJson = messageJson.replaceAll("%22", URLEncoder.encode("%22"));
-        messageJson = messageJson.replaceAll("%", URLEncoder.encode("%"));
-        String javascriptCommand = String.format(BridgeUtil.JS_HANDLE_MESSAGE_FROM_JAVA, messageJson);
-
-        BridgeLog.d(TAG, "javascriptCommand->" + javascriptCommand);
-
-        // the data must be passed on the main thread --- focus
-        if (Thread.currentThread() == Looper.getMainLooper().getThread()) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT && javascriptCommand.length() >= BridgeUtil.URL_MAX_CHARACTER_NUM) {
-                mWebView.evaluateJavascript(javascriptCommand, null);
-            } else {
-                mWebView.loadUrl(javascriptCommand);
-            }
-        }
-
-
 //        String messageJson = new Gson().toJson(message);
-//
-//        String javascriptCommand =
-//                "javascript:handleMessageFromJava(" + messageJson + ")";
-//
-//        if (Looper.myLooper() == Looper.getMainLooper()) {
-//            mWebView.evaluateJavascript(javascriptCommand, null);
-//        } else {
-//            mMainHandler.post(() ->
-//                    mWebView.evaluateJavascript(javascriptCommand, null)
-//            );
+//        messageJson = messageJson.replaceAll("(\\\\)([^utrn])", "\\\\\\\\$1$2");
+//        messageJson = messageJson.replaceAll("(?<=[^\\\\])(\")", "\\\\\"");
+//        messageJson = messageJson.replaceAll("(?<=[^\\\\])(\')", "\\\\\'");
+//        messageJson = messageJson.replaceAll("%7B", URLEncoder.encode("%7B"));
+//        messageJson = messageJson.replaceAll("%7D", URLEncoder.encode("%7D"));
+//        messageJson = messageJson.replaceAll("%22", URLEncoder.encode("%22"));
+//        messageJson = messageJson.replaceAll("%", URLEncoder.encode("%"));
+//        String javascriptCommand = String.format(BridgeUtil.JS_HANDLE_MESSAGE_FROM_JAVA, messageJson);
+//        if (Thread.currentThread() == Looper.getMainLooper().getThread()) {
+//            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT && javascriptCommand.length() >= BridgeUtil.URL_MAX_CHARACTER_NUM) {
+//                mWebView.evaluateJavascript(javascriptCommand, null);
+//            } else {
+//                mWebView.loadUrl(javascriptCommand);
+//            }
 //        }
 
+        String messageJson = GSON.toJson(message);
+        String jsArgument = JSONObject.quote(messageJson);
+        String javascriptCommand = String.format(
+                JS_HANDLE_MESSAGE_FROM_JAVA,
+                jsArgument
+        );
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+            mWebView.evaluateJavascript(javascriptCommand, null);
+        } else {
+            mWebView.loadUrl(javascriptCommand);
+        }
 
     }
-
-
-
-
 
 
     public void sendResponse(Object data, String callbackId) {
