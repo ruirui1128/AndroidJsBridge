@@ -18,6 +18,10 @@ import com.smallbuer.jsbridge.core.BridgeTiny
 import com.smallbuer.jsbridge.core.BridgeWebView
 import com.smallbuer.jsbridge.core.BridgeWebViewClient
 import com.smallbuer.jsbridge.core.CallBackFunction
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : AppCompatActivity() {
 
@@ -74,13 +78,23 @@ class MainActivity : AppCompatActivity() {
 
         mBridgeWebView?.loadUrl(url)
         mBtnNativeToJsBridgeWebView?.setOnClickListener {
-            mBridgeWebView?.callHandler("functionInJs", "我是原生传递的参数") { data ->
-                Log.i(
-                    TAG,
-                    "reponse data from js $data" + ",Thread is " + Thread.currentThread().name
-                )
-                Toast.makeText(this@MainActivity, data, Toast.LENGTH_SHORT).show()
+
+            // 读取assets目录下的test.txt文件
+            MainScope().launch(Dispatchers.IO) {
+                Log.d("MainScope", "开始读取")
+                val text = assets.open("test.txt").bufferedReader().use { it.readText() }
+                Log.d(TAG, "读取完毕")
+                withContext(Dispatchers.Main){
+                    mBridgeWebView?.callHandler("functionInJs", text) { data ->
+                        Log.i(
+                            TAG,
+                            "reponse data from js $data" + ",Thread is " + Thread.currentThread().name
+                        )
+                        Toast.makeText(this@MainActivity, data, Toast.LENGTH_SHORT).show()
+                    }
+                }
             }
+
         }
 
         //点击此按钮后,可以通过参考shouldInterceptRequest回调拦截url,根据自己业务拦截指定的URL进行处理

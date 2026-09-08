@@ -83,38 +83,57 @@ public class BridgeTiny {
 
     public static final String JS_HANDLE_MESSAGE_FROM_JAVA =
             "WebViewJavascriptBridge._handleMessageFromNative(%s);";
+
+
+    private static final int LARGE_MESSAGE_THRESHOLD =
+            10 * 1024 * 1024; // 1MB
+
+
     private static final Gson GSON = new Gson();
 
     public void dispatchMessage(Object message) {
 
-//        String messageJson = new Gson().toJson(message);
-//        messageJson = messageJson.replaceAll("(\\\\)([^utrn])", "\\\\\\\\$1$2");
-//        messageJson = messageJson.replaceAll("(?<=[^\\\\])(\")", "\\\\\"");
-//        messageJson = messageJson.replaceAll("(?<=[^\\\\])(\')", "\\\\\'");
-//        messageJson = messageJson.replaceAll("%7B", URLEncoder.encode("%7B"));
-//        messageJson = messageJson.replaceAll("%7D", URLEncoder.encode("%7D"));
-//        messageJson = messageJson.replaceAll("%22", URLEncoder.encode("%22"));
-//        messageJson = messageJson.replaceAll("%", URLEncoder.encode("%"));
-//        String javascriptCommand = String.format(BridgeUtil.JS_HANDLE_MESSAGE_FROM_JAVA, messageJson);
-//        if (Thread.currentThread() == Looper.getMainLooper().getThread()) {
-//            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT && javascriptCommand.length() >= BridgeUtil.URL_MAX_CHARACTER_NUM) {
-//                mWebView.evaluateJavascript(javascriptCommand, null);
-//            } else {
-//                mWebView.loadUrl(javascriptCommand);
-//            }
+//        String messageJson = GSON.toJson(message);
+//        String jsArgument = JSONObject.quote(messageJson);
+//        String javascriptCommand = String.format(
+//                JS_HANDLE_MESSAGE_FROM_JAVA,
+//                jsArgument
+//        );
+//
+//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+//            mWebView.evaluateJavascript(javascriptCommand, null);
+//        } else {
+//            mWebView.loadUrl(javascriptCommand);
 //        }
 
         String messageJson = GSON.toJson(message);
-        String jsArgument = JSONObject.quote(messageJson);
-        String javascriptCommand = String.format(
-                JS_HANDLE_MESSAGE_FROM_JAVA,
-                jsArgument
-        );
+        int length = messageJson.length();
+        Log.d(TAG, "messageJson length = " + length);
+        String javascriptCommand;
+
+        if (length > LARGE_MESSAGE_THRESHOLD) {
+            // 大消息：直接传 JS Object
+            javascriptCommand =
+                    "WebViewJavascriptBridge"
+                            + "._handleMessageFromNative("
+                            + messageJson
+                            + ");";
+
+        } else {
+
+            String jsArgument = JSONObject.quote(messageJson);
+
+            javascriptCommand =
+                    "WebViewJavascriptBridge"
+                            + "._handleMessageFromNative("
+                            + jsArgument
+                            + ");";
+        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
             mWebView.evaluateJavascript(javascriptCommand, null);
         } else {
-            mWebView.loadUrl(javascriptCommand);
+            mWebView.loadUrl("javascript:" + javascriptCommand);
         }
 
     }
